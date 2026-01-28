@@ -20,7 +20,7 @@ def install_model(lang: str, vosk_cache: str) -> None:
     if not model_path.exists():
         model_path.mkdir(parents=True, exist_ok=True)
 
-    Model(lang=lang)
+    Model(model_name=lang)
 
 
 args = sys.argv[1:]

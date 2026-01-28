@@ -106,10 +106,25 @@ class LIPSYNC2D_VoskHelper():
                 raise Exception(f"Error while loading cached files index.{e}")
 
         if langs_list:
+            cache_path = LIPSYNC2D_VoskHelper.get_extension_path("cache")
+            
             # List should already be filtered. This is done as a safety measure.
-            all_langs = [(l["lang"], l["lang_text"]) for l in langs_list if
-                         l["lang"] != "all" and l["obsolete"] == "false" and l['type'] == 'small' and l[
-                             "lang"] not in LIPSYNC2D_VoskHelper.excluded_lang]
+            for l in langs_list:
+                if l["lang"] == "all" or l["obsolete"] != "false" or l["lang"] in LIPSYNC2D_VoskHelper.excluded_lang:
+                    continue
+                
+                name = l["name"]
+                lang_text = l["lang_text"]
+                size_text = l.get('size_text', 'Unknown')
+                label = f"{lang_text} ({size_text})"
+                
+                # Check if installed
+                model_path = cache_path / name
+                if model_path.exists() and model_path.is_dir():
+                    label = f"{label} - Installed"
+                
+                all_langs.append((name, label))
+
             all_langs.sort(key=lambda x: x[1])
 
         all_langs = [('none', "-- None --", "No selection"), ] + all_langs
@@ -161,9 +176,9 @@ class LIPSYNC2D_VoskHelper():
                 raise Exception(f"Error while loading cached files index. {e}")
 
             all_dir_names = {
-                lang["name"]: (lang["lang"], lang["lang_text"], lang["lang"])
+                lang["name"]: (lang["name"], f"✔ {lang['lang_text']} ({lang.get('size_text', 'Unknown')})", lang["name"])
                 for lang in langs_list
-                if lang["type"] == "small" and lang["obsolete"] == "false"
+                if lang["obsolete"] == "false"
             }
 
             all_offline_langs = [all_dir_names[pathlib.Path(model_dir).name] for model_dir in ext_path.iterdir() if
@@ -192,7 +207,7 @@ class LIPSYNC2D_VoskHelper():
                 with open(LIPSYNC2D_VoskHelper.get_language_list_file(), "w", encoding="utf-8") as f:
                     full_list = list_request.json()
                     filter_list = [item for item in full_list if
-                                   item["type"] == "small" and item["obsolete"] == "false"]
+                                   item["obsolete"] == "false"]
                     json.dump(filter_list, f, ensure_ascii=False)
             except Exception as e:
                 raise Exception(f"Error while creating cached file index: {e}")
