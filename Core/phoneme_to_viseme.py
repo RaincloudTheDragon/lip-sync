@@ -31,6 +31,7 @@ phoneme_to_viseme_arkit_v2 = {
     "ʀ": "RR",
     "ɹ": "RR",
     "ɻ": "RR",
+    "ɚ": "RR",
     # DD – default consonants
     "t": "DD",
     "d": "DD",
@@ -48,6 +49,7 @@ phoneme_to_viseme_arkit_v2 = {
     # kk – velar stops
     "k": "kk",
     "g": "kk",
+    "ɡ": "kk",
     # nn – nasal group + "L"
     "n": "nn",
     "ŋ": "nn",
