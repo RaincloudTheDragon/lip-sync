@@ -32,6 +32,8 @@ phoneme_to_viseme_arkit_v2 = {
     "ɹ": "RR",
     "ɻ": "RR",
     "ɚ": "RR",
+    "ɜ:": "RR",
+    "ɜ": "RR",
     # DD – default consonants
     "t": "DD",
     "d": "DD",
@@ -61,6 +63,7 @@ phoneme_to_viseme_arkit_v2 = {
     # aa – open and low/mid front vowels
     "a": "aa",
     "aː": "aa",
+    "ɑː": "aa",
     "ä": "aa",
     "æ": "aa",
     "ɐ": "aa",
