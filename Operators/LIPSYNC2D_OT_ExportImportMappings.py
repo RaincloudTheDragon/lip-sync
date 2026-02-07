@@ -76,6 +76,12 @@ class LIPSYNC2D_OT_ImportMappings(bpy.types.Operator, ImportHelper):
         maxlen=255,
     ) # type: ignore
 
+    create_missing: bpy.props.BoolProperty(
+        name="Create Missing",
+        description="Create missing Shape Keys or Actions if they don't exist",
+        default=False,
+    ) # type: ignore
+
     def execute(self, context):
         obj = context.active_object
         if not obj or not hasattr(obj, "lipsync2d_props"):
@@ -105,6 +111,7 @@ class LIPSYNC2D_OT_ImportMappings(bpy.types.Operator, ImportHelper):
 
         loaded_count = 0
         skipped_count = 0
+        created_count = 0
 
         for item in mappings:
             viseme_id = item.get("viseme")
@@ -132,6 +139,19 @@ class LIPSYNC2D_OT_ImportMappings(bpy.types.Operator, ImportHelper):
                     elif obj.data and obj.data.shape_keys and mapping_value in obj.data.shape_keys.key_blocks:
                         setattr(props, prop_name, mapping_value)
                         loaded_count += 1
+                    elif self.create_missing:
+                        # Ensure Basis key exists first
+                        if not obj.data.shape_keys:
+                            obj.shape_key_add(name="Basis")
+                        
+                        obj.shape_key_add(name=mapping_value)
+                        # We need to refresh the EnumProperty somehow or just set the string if it allows (usually it stores string index)
+                        # For now, just setting the string property should work if the Enum updates dynamically or if it's a StringProperty storage.
+                        # However, for EnumProperty backed by a function, setting the string *should* work if the item is now in the list.
+                        # Since we just added it to key_blocks, it should be valid.
+                        setattr(props, prop_name, mapping_value)
+                        created_count += 1
+                        loaded_count += 1
                     else:
                         self.report({'INFO'}, f"Skipped '{viseme_id}': Shape Key '{mapping_value}' not found on object.")
                         skipped_count += 1
@@ -151,6 +171,13 @@ class LIPSYNC2D_OT_ImportMappings(bpy.types.Operator, ImportHelper):
                         if action:
                             setattr(props, prop_name, action)
                             loaded_count += 1
+                        elif self.create_missing:
+                            new_action = bpy.data.actions.new(name=mapping_value)
+                            # Mark as asset so it appears in the filtered dropdowns
+                            new_action.asset_mark()
+                            setattr(props, prop_name, new_action)
+                            created_count += 1
+                            loaded_count += 1
                         else:
                             self.report({'INFO'}, f"Skipped '{viseme_id}': Action '{mapping_value}' not found in blend file.")
                             skipped_count += 1
@@ -158,5 +185,5 @@ class LIPSYNC2D_OT_ImportMappings(bpy.types.Operator, ImportHelper):
                     self.report({'INFO'}, f"Skipped '{viseme_id}': Property '{prop_name}' not found.")
                     skipped_count += 1
 
-        self.report({'INFO'}, f"Imported {loaded_count} mappings. Skipped {skipped_count}.")
+        self.report({'INFO'}, f"Imported {loaded_count} mappings. Created {created_count} missing items. Skipped {skipped_count}.")
         return {'FINISHED'}
