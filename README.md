@@ -21,6 +21,10 @@
   - Download any available language model
   - Progress bar
   - Cancel download
+- Export/Import Mappings
+  - Export viseme mappings to JSON
+  - Import viseme mappings from JSON
+  - Create missing shape keys or actions if they don't exist
 
 
 ### README FROM OFFICAL REPO
