@@ -382,8 +382,8 @@ class LIPSYNC2D_VoskHelper():
         if addon is None or addon.preferences is None:
             return
         
-        addon.preferences["is_downloading"] = False
-        addon.preferences["download_progress"] = 0.0
+        addon.preferences.is_downloading = False
+        addon.preferences.download_progress = 0.0
         
         # Clean up progress file if it exists
         progress_file = LIPSYNC2D_VoskHelper.get_extension_path("tmp") / "download_progress.json"
@@ -441,7 +441,7 @@ class LIPSYNC2D_VoskHelper():
             try:
                 with open(progress_file, "r") as f:
                     progress_data = json.load(f)
-                    addon.preferences["download_progress"] = progress_data.get("progress", 0.0)
+                    addon.preferences.download_progress = progress_data.get("progress", 0.0)
             except Exception:
                 pass  # Silently ignore read errors
 
@@ -451,8 +451,8 @@ class LIPSYNC2D_VoskHelper():
         else:
             # Process finished
             LIPSYNC2D_VoskHelper.worker_proc = None
-            addon.preferences["is_downloading"] = False
-            addon.preferences["download_progress"] = 0.0
+            addon.preferences.is_downloading = False
+            addon.preferences.download_progress = 0.0
             
             # Clean up progress file
             if progress_file.exists():

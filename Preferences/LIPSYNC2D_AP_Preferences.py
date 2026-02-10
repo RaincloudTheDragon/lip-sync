@@ -24,6 +24,8 @@ class LIPSYNC2D_AP_Preferences(bpy.types.AddonPreferences):
         
         # Check for orphaned download state (e.g., after Blender restart)
         if self.is_downloading and LIPSYNC2D_VoskHelper.worker_proc is None:
+            self.is_downloading = False
+            self.download_progress = 0.0
             LIPSYNC2D_VoskHelper.reset_download_state()
 
         LIPSYNC2D_AP_Preferences.draw_online_access_warning(layout)
