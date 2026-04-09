@@ -647,6 +647,9 @@ class LIPSYNC2D_PoseAssetsAnimator:
         :return: The corrected end frame for the word.
         :rtype: int
         """
+        if visemes_data["visemes_len"] <= 0:
+            return word_start_frame
+
         return word_start_frame + round(
             visemes_data["visemes_parts"] * (visemes_data["visemes_len"] - 1)
         )

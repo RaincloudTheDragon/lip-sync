@@ -497,6 +497,9 @@ class LIPSYNC2D_ShapeKeysAnimator:
 
     @staticmethod
     def get_corrected_end_frame(word_start_frame, visemes_data: VisemeData) -> int:
+        if visemes_data["visemes_len"] <= 0:
+            return word_start_frame
+
         return word_start_frame + round(
             visemes_data["visemes_parts"] * (visemes_data["visemes_len"] - 1)
         )

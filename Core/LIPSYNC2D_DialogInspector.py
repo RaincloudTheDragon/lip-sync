@@ -47,7 +47,17 @@ class LIPSYNC2D_DialogInspector:
         visemes = [LIPSYNC2D_DialogInspector.ipaphoneme_to_viseme(p) for p in phoneme]
         visemes_no_sil = [v for v in visemes if v != "sil"]
         visemes_len = len(visemes_no_sil)
-        visemes_parts = duration / len(visemes_no_sil)
+
+        # Some phoneme strings collapse to silence-only markers after normalization.
+        # Keep those words skippable instead of crashing on division by zero.
+        if visemes_len == 0:
+            return {
+                "visemes": [],
+                "visemes_len": 0,
+                "visemes_parts": 0,
+            }
+
+        visemes_parts = duration / visemes_len
 
         return {
             "visemes": visemes_no_sil,
