@@ -29,4 +29,4 @@ class LIPSYNC2D_PT_Settings(bpy.types.Panel):
         row.label(text="Language Model")
         row.prop(prefs, "current_lang", text="")
         LIPSYNC2D_AP_Preferences.draw_model_state(row) #type: ignore
-
+        LIPSYNC2D_AP_Preferences.draw_model_download_details(layout)
