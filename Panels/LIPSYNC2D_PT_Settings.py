@@ -40,4 +40,3 @@ class LIPSYNC2D_PT_Settings(bpy.types.Panel):
                 row.operator("wm.lipsync_install_model", text="", icon="IMPORT")
                 
         LIPSYNC2D_AP_Preferences.draw_model_state(row) #type: ignore
-        LIPSYNC2D_AP_Preferences.draw_model_download_details(layout)
