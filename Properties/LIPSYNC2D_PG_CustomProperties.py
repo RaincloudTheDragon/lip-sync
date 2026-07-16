@@ -154,47 +154,93 @@ def get_lip_sync_type_items(self, context: BpyContext | None):
 
 
 def poll_pose_assets(self, obj: bpy.types.ID):
-    return bool(obj.asset_data)
+    # Ensure it's an Action
+    if not isinstance(obj, bpy.types.Action):
+        return False
+    
+    # Must have asset data (be marked as a pose asset)
+    if not obj.asset_data:
+        return False
+    
+    # Allow local, linked, and library override actions
+    # This is necessary because linked library pose assets should still be usable
+    return True
+
+
+def get_channel_items(self, context: BpyContext | None):
+    items = [("ALL", "All Channels", "Bake audio from all channels")]
+
+    if context is None or context.scene is None or context.scene.sequence_editor is None:
+        return intern_enum_items(items)
+
+    channels = set()
+    for strip in context.scene.sequence_editor.strips_all:
+        if strip.type == "SOUND" and not strip.mute:
+            channels.add(strip.channel)
+
+    sorted_channels = sorted(list(channels))
+    
+    for channel in sorted_channels:
+        c_data = context.scene.sequence_editor.channels[channel]
+        channel_name = str(channel)+" - "+c_data.name
+        if c_data.mute:
+            channel_name += " (Muted)"
+        items.append((str(channel), channel_name, f"Bake audio from Channel {channel}"))
+    return intern_enum_items(items)
 
 
 class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
+    lip_sync_2d_bake_channel: bpy.props.EnumProperty(
+        name="Channel",
+        description="Select specific channel to bake audio from",
+        items=get_channel_items
+    )  # type: ignore
+
     lip_sync_2d_initialized: bpy.props.BoolProperty(
         name="Initilize Lip Sync",
         description="Initilize Lip Sync on selection",
         default=False,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet: bpy.props.PointerProperty(
         name="Sprite Sheet",
         description="The name of the addon to reload",
         type=bpy.types.Image,
         update=update_sprite_sheet,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_main_material: bpy.props.PointerProperty(
         name="Main Material",
         description="Material containing Sprite sheet",
         type=bpy.types.Material,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet_columns: bpy.props.IntProperty(
-        name="Columns", description="Total of columns in sprite sheet", default=1
+        name="Columns", description="Total of columns in sprite sheet", default=1,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet_rows: bpy.props.IntProperty(
         name="Rows",
         description="Total of rows in sprite sheet",
         update=update_sprite_sheet_rows,
         default=1,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet_sprite_scale: bpy.props.FloatProperty(
         name="Sprite",
         description="Adjust sprite scale so it fits in mouth area",
         default=1,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet_main_scale: bpy.props.FloatProperty(
-        name="Lips", description="Adjust Lips scale", default=1
+        name="Lips", description="Adjust Lips scale", default=1,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet_index: bpy.props.IntProperty(
         name="Sprite Index",
         description="Sprite Index. Start at 0, from Bottom Left to Top Right",
         default=1,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
     lip_sync_2d_sprite_sheet_format: bpy.props.EnumProperty(
         name="Sprite sheet format",
@@ -215,6 +261,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         ],
         update=update_sprite_sheet_format,
         default=3,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_lips_type: bpy.props.EnumProperty(
@@ -223,6 +270,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         items=get_lip_sync_type_items,
         update=update_sprite_sheet_format,
         default=0,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_in_between_threshold: bpy.props.FloatProperty(
@@ -231,6 +279,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         default=0.0417,
         subtype="TIME",
         unit="TIME_ABSOLUTE",
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_sil_threshold: bpy.props.FloatProperty(
@@ -239,6 +288,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         default=0.22,
         subtype="TIME",
         unit="TIME_ABSOLUTE",
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_sps_in_between_threshold: bpy.props.FloatProperty(
@@ -247,6 +297,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         default=0.0417,
         subtype="TIME",
         unit="TIME_ABSOLUTE",
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_sps_sil_threshold: bpy.props.FloatProperty(
@@ -255,6 +306,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         default=0.22,
         subtype="TIME",
         unit="TIME_ABSOLUTE",
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_close_motion_duration: bpy.props.FloatProperty(
@@ -263,29 +315,40 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         default=0.2,
         subtype="TIME",
         unit="TIME_ABSOLUTE",
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_remove_animation_data: bpy.props.BoolProperty(
         name="Remove Animation",
         description="Also remove action, action slot and keyframes",
         default=True,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_remove_cgp_node_group: bpy.props.BoolProperty(
         name="Remove Nodes",
         description="Also remove node groups from Object's Materials",
         default=True,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_use_clear_keyframes: bpy.props.BoolProperty(
         name="Clear Keyframes",
         description="Clear Keyframes before Bake",
         default=True,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_use_bake_range: bpy.props.BoolProperty(
         name="Use Range",
         description="Only bake between specified range",
+        default=False,
+        override={'LIBRARY_OVERRIDABLE'}
+    )  # type: ignore
+
+    lip_sync_2d_debug_output: bpy.props.BoolProperty(
+        name="Debug Output",
+        description="Output phoneme and viseme data to a text block",
         default=False,
     )  # type: ignore
 
@@ -296,6 +359,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         min=0,
         set=set_bake_start,
         get=get_bake_start,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_bake_end: bpy.props.IntProperty(
@@ -305,6 +369,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         min=0,
         set=set_bake_end,
         get=get_bake_end,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_rig_type_basic: bpy.props.BoolProperty(
@@ -315,6 +380,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
         ),
         default=True,
         update=update_rig_type_basic,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_rig_type_advanced: bpy.props.BoolProperty(
@@ -325,6 +391,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
             "Only use this if Basic Rig is not working."
         ),
         update=update_rig_type_advanced,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     lip_sync_2d_prioritize_accuracy: bpy.props.BoolProperty(
@@ -335,6 +402,7 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
             "from being skipped when they occur in rapid succession."
         ),
         default=False,
+        override={'LIBRARY_OVERRIDABLE'}
     )  # type: ignore
 
     @classmethod
@@ -373,5 +441,6 @@ class LIPSYNC2D_PG_CustomProperties(bpy.types.PropertyGroup):
                     name=f"Viseme {name}",
                     description=desc,
                     poll=poll_pose_assets,
-                ),
+                    override={'LIBRARY_OVERRIDABLE'}
+                ),  # type: ignore
             )

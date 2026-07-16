@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from re import match
 from typing import Literal
 
 import bpy
@@ -14,22 +15,38 @@ from ..LIPSYNC2D_Utils import get_package_name
 class LIPSYNC2D_AP_Preferences(bpy.types.AddonPreferences):
     bl_idname = get_package_name() # type: ignore
 
-    current_lang: bpy.props.EnumProperty(name="Lip Sync Lang", items=LIPSYNC2D_VoskHelper.get_available_languages, update=LIPSYNC2D_VoskHelper.install_model, default=0) # type: ignore
+    current_lang: bpy.props.EnumProperty(name="Lip Sync Lang", items=LIPSYNC2D_VoskHelper.get_available_languages, default=0) # type: ignore
     is_downloading: bpy.props.BoolProperty(name="Download Status", default=False) # type: ignore
-    download_progress: bpy.props.FloatProperty(name="Download Progress", min=0.0, max=1.0, subtype="FACTOR", default=0.0) # type: ignore
-    download_status_text: bpy.props.StringProperty(name="Download Status Text", default="") # type: ignore
+    download_progress: bpy.props.FloatProperty(name="Download Progress", default=0.0, min=0.0, max=100.0) # type: ignore
 
     def draw(self, context):
         layout = self.layout
+        
+        # Check for orphaned download state (e.g., after Blender restart)
+        if self.is_downloading and LIPSYNC2D_VoskHelper.worker_proc is None:
+            self.is_downloading = False
+            self.download_progress = 0.0
+            LIPSYNC2D_VoskHelper.reset_download_state()
 
         LIPSYNC2D_AP_Preferences.draw_online_access_warning(layout)
 
         row = layout.row(align=True)
-        row.label(text="Language Model")
-        row.prop(self, "current_lang", text="") 
+        # Use sub-layout for property to control enabled state independently
+        sub = row.row(align=True)
+        sub.enabled = not self.is_downloading
+        sub.prop(self, "current_lang", text="") 
+        
+        current_lang = self.current_lang
+        if current_lang != "none":
+            # Check if model installed
+            prefs = context.preferences.addons[get_package_name()].preferences
+            cache_path = LIPSYNC2D_VoskHelper.get_extension_path("cache")
+            model_path = cache_path / current_lang
+
+            if (not model_path.exists() or not model_path.is_dir()) and not self.is_downloading:
+                row.operator("wm.lipsync_install_model", text="", icon="IMPORT")
         
         LIPSYNC2D_AP_Preferences.draw_model_state(row)
-        LIPSYNC2D_AP_Preferences.draw_model_download_details(layout)
         LIPSYNC2D_AP_Preferences.draw_fetch_list_ops(layout)
 
     @staticmethod
@@ -53,47 +70,15 @@ class LIPSYNC2D_AP_Preferences(bpy.types.AddonPreferences):
             installed = " Installed"
             row.enabled = True
         elif model_status == "DOWNLOADING":
-            installed = " Downloading..."
-            row.enabled = False
-
-
-        row.label(text=installed)
-
-    @staticmethod
-    def draw_model_download_details(layout: bpy.types.UILayout) -> None:
-        package_name = get_package_name()
-        if package_name is None or bpy.context.preferences is None:
-            return
-
-        addon = bpy.context.preferences.addons.get(package_name)
-        if addon is None or addon.preferences is None:
-            return
-
-        prefs = addon.preferences
-        current_lang = LIPSYNC2D_AP_Preferences.get_current_lang_code()
-        if current_lang == "none":
-            return
-
-        model_size = LIPSYNC2D_VoskHelper.get_model_size_text(current_lang)
-        if model_size:
-            row = layout.row(align=True)
-            row.label(text=f"Model Size: {model_size}")
-
-        if LIPSYNC2D_AP_Preferences.get_model_state() == "INSTALLED":
-            prefs.is_downloading = False
-            prefs.download_progress = 0.0
-            prefs.download_status_text = ""
-            return
-
-        if not prefs.is_downloading:
-            return
-
-        row = layout.row(align=True)
-        progress_text = prefs.download_status_text or "Downloading..."
-        if hasattr(row, "progress"):
-            row.progress(factor=prefs.download_progress, type="BAR", text=progress_text)
+            # Get progress percentage
+            prefs = bpy.context.preferences.addons[get_package_name()].preferences # type: ignore
+            progress = getattr(prefs, "download_progress", 0.0)
+            installed = f" Downloading... {int(progress)}%"
+            row.label(text=installed)
+            row.enabled = True
+            row.operator("wm.lipsync_cancel_download", text="", icon="X")
         else:
-            row.prop(prefs, "download_progress", text=progress_text, slider=True)
+            row.label(text=installed)
 
     @staticmethod
     @LIPSYNC2D_VoskHelper.setextensionpath
@@ -111,12 +96,7 @@ class LIPSYNC2D_AP_Preferences(bpy.types.AddonPreferences):
         if current_lang != "none":
             if directory is not None and Path(directory).exists():
                 model_file_list = os.listdir(directory)
-                model_info = LIPSYNC2D_VoskHelper.get_model_info(current_lang)
-                model_name = model_info.get("name") if model_info is not None else None
-                model_file = [
-                    model for model in model_file_list
-                    if model == model_name and os.path.isdir(os.path.join(directory, model))
-                ]
+                model_file = [model for model in model_file_list if match(f"vosk-model(-small)?-{current_lang}", model) and os.path.isdir(os.path.join(directory, model))]
                 if model_file:
                     result = "INSTALLED"
                 elif prefs.is_downloading: #type: ignore
@@ -149,3 +129,4 @@ class LIPSYNC2D_AP_Preferences(bpy.types.AddonPreferences):
     def get_current_lang_code() -> str:
         prefs = bpy.context.preferences.addons[get_package_name()].preferences # type: ignore
         return prefs.current_lang
+

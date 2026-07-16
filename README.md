@@ -1,5 +1,35 @@
 # 🗣️ Blender Lip Sync Addon
 
+## NON OFFICIAL FORK - USE AT YOUR OWN RISK
+[Offical Addon Repository](https://github.com/Charley3d/lip-sync) 
+
+### NEW FEATURES
+
+- Blender 5.0+ Compatibility
+- Linked Library Armature Support
+  - No need to make linked library armatures local
+- Select a single audio channel to analyze
+- Additional Phoneme to Viseme Mapping
+  - L sounds get their own viseme
+  - Add ɡ to kk
+  - Add ɚ to RR
+  - Add ɜ: to R
+  - Add ɑː to aa
+- Optional debugging
+  - text output to text editor
+- Advanced model download
+  - Download any available language model
+  - Progress bar
+  - Cancel download
+- Export/Import Mappings
+  - Export viseme mappings to JSON
+  - Import viseme mappings from JSON
+  - Create missing shape keys or actions if they don't exist
+
+
+### README FROM OFFICAL REPO
+
+
 Official Documentation: [https://docs.cgpoly.io](https://docs.cgpoly.io/lip-sync-documentation)
 
 A **Blender addon** for automatic lip-syncing based on audio input.  

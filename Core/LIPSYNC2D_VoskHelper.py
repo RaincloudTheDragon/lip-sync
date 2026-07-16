@@ -3,7 +3,7 @@ import os
 import pathlib
 import subprocess
 import sys
-from typing import Callable, Literal, TextIO, cast
+from typing import Callable, Literal, cast
 
 import bpy
 import requests
@@ -29,8 +29,6 @@ class LIPSYNC2D_VoskHelper():
     :type excluded_lang: list[str]
     """
     worker_proc: subprocess.Popen | None = None
-    worker_log_path: pathlib.Path | None = None
-    worker_log_file: TextIO | None = None
     # Langs in this list won't show up in Language Model selection
     excluded_lang = [
         "kz",  # Unstable, throw ASSERTION_FAILED error
@@ -108,10 +106,25 @@ class LIPSYNC2D_VoskHelper():
                 raise Exception(f"Error while loading cached files index.{e}")
 
         if langs_list:
+            cache_path = LIPSYNC2D_VoskHelper.get_extension_path("cache")
+            
             # List should already be filtered. This is done as a safety measure.
-            all_langs = [(l["lang"], l["lang_text"]) for l in langs_list if
-                         l["lang"] != "all" and l["obsolete"] == "false" and l['type'] == 'small' and l[
-                             "lang"] not in LIPSYNC2D_VoskHelper.excluded_lang]
+            for l in langs_list:
+                if l["lang"] == "all" or l["obsolete"] != "false" or l["lang"] in LIPSYNC2D_VoskHelper.excluded_lang:
+                    continue
+                
+                name = l["name"]
+                lang_text = l["lang_text"]
+                size_text = l.get('size_text', 'Unknown')
+                label = f"{lang_text} ({size_text})"
+                
+                # Check if installed
+                model_path = cache_path / name
+                if model_path.exists() and model_path.is_dir():
+                    label = f"{label} - Installed"
+                
+                all_langs.append((name, label))
+
             all_langs.sort(key=lambda x: x[1])
 
         all_langs = [('none', "-- None --", "No selection"), ] + all_langs
@@ -163,9 +176,9 @@ class LIPSYNC2D_VoskHelper():
                 raise Exception(f"Error while loading cached files index. {e}")
 
             all_dir_names = {
-                lang["name"]: (lang["lang"], lang["lang_text"], lang["lang"])
+                lang["name"]: (lang["name"], f"✔ {lang['lang_text']} ({lang.get('size_text', 'Unknown')})", lang["name"])
                 for lang in langs_list
-                if lang["type"] == "small" and lang["obsolete"] == "false"
+                if lang["obsolete"] == "false"
             }
 
             all_offline_langs = [all_dir_names[pathlib.Path(model_dir).name] for model_dir in ext_path.iterdir() if
@@ -194,7 +207,7 @@ class LIPSYNC2D_VoskHelper():
                 with open(LIPSYNC2D_VoskHelper.get_language_list_file(), "w", encoding="utf-8") as f:
                     full_list = list_request.json()
                     filter_list = [item for item in full_list if
-                                   item["type"] == "small" and item["obsolete"] == "false"]
+                                   item["obsolete"] == "false"]
                     json.dump(filter_list, f, ensure_ascii=False)
             except Exception as e:
                 raise Exception(f"Error while creating cached file index: {e}")
@@ -215,100 +228,11 @@ class LIPSYNC2D_VoskHelper():
         return LIPSYNC2D_VoskHelper.get_extension_path("cache") / "languages_list.json"
 
     @staticmethod
-    def get_model_info(lang: str | None = None) -> dict | None:
-        if lang is None:
-            package_name = get_package_name()
-            if package_name is None or bpy.context.preferences is None:
-                return None
-
-            addon = bpy.context.preferences.addons.get(package_name)
-            if addon is None or addon.preferences is None:
-                return None
-
-            lang = addon.preferences.current_lang
-
-        if lang == "none":
-            return None
-
-        language_list_file = LIPSYNC2D_VoskHelper.get_language_list_file()
-        if not language_list_file.is_file():
-            return None
-
-        try:
-            with open(language_list_file, "r", encoding="utf-8") as f:
-                langs_list = json.load(f)
-        except Exception:
-            return None
-
-        for item in langs_list:
-            if (
-                item.get("lang") == lang
-                and item.get("type") == "small"
-                and item.get("obsolete") == "false"
-            ):
-                return item
-
-        return None
-
-    @staticmethod
-    def get_model_size_text(lang: str | None = None) -> str:
-        model_info = LIPSYNC2D_VoskHelper.get_model_info(lang)
-        if model_info is None:
-            return ""
-
-        return str(model_info.get("size_text") or "")
-
-    @staticmethod
-    def get_model_download_zip_path(lang: str | None = None) -> pathlib.Path | None:
-        model_info = LIPSYNC2D_VoskHelper.get_model_info(lang)
-        if model_info is None or "name" not in model_info:
-            return None
-
-        return LIPSYNC2D_VoskHelper.get_extension_path("cache") / f"{model_info['name']}.zip"
-
-    @staticmethod
-    def update_download_progress(addon_prefs) -> None:
-        model_info = LIPSYNC2D_VoskHelper.get_model_info(addon_prefs.current_lang)
-        if model_info is None:
-            addon_prefs.download_progress = 0.0
-            addon_prefs.download_status_text = ""
-            return
-
-        size = int(model_info.get("size") or 0)
-        zip_path = LIPSYNC2D_VoskHelper.get_model_download_zip_path(addon_prefs.current_lang)
-
-        if zip_path is not None and zip_path.is_file() and size > 0:
-            progress = min(1.0, max(0.0, zip_path.stat().st_size / size))
-            addon_prefs.download_progress = progress
-            addon_prefs.download_status_text = f"Downloading {progress * 100:.0f}%"
-        elif addon_prefs.is_downloading and addon_prefs.download_progress >= 1.0:
-            addon_prefs.download_status_text = "Installing model..."
-        elif addon_prefs.is_downloading:
-            addon_prefs.download_status_text = "Starting download..."
-
-        LIPSYNC2D_VoskHelper.tag_ui_redraw()
-
-    @staticmethod
-    def tag_ui_redraw() -> None:
-        window_manager = bpy.context.window_manager
-        if window_manager is None:
-            return
-
-        for window in window_manager.windows:
-            screen = window.screen
-            if screen is None:
-                continue
-
-            for area in screen.areas:
-                if area.type in {"VIEW_3D", "PREFERENCES"}:
-                    area.tag_redraw()
-
-    @staticmethod
     def get_available_languages(_, context) -> list[tuple[str, str, str]]:
         """
         Retrieve the list of available languages either online or offline.
 
-        This method determines available languages based on the application’s online
+        This method determines available languages based on the application's online
         connectivity. When online access is available, it returns the list of languages
         available online; otherwise, it retrieves the list of cached languages. Each language entry
         is represented by a tuple containing three string elements.
@@ -323,6 +247,32 @@ class LIPSYNC2D_VoskHelper():
         """
         available_langs = LIPSYNC2D_VoskHelper.get_available_langs_online() if bpy.app.online_access else LIPSYNC2D_VoskHelper.get_available_langs_offline()
         return available_langs
+
+    @staticmethod
+    def get_model_url(model_name: str) -> str | None:
+        """
+        Get the download URL for a specific model from the cached languages list.
+
+        :param model_name: The name of the model to get the URL for
+        :return: The download URL for the model, or None if not found
+        :rtype: str | None
+        """
+        cached_langs_list_file = LIPSYNC2D_VoskHelper.get_language_list_file()
+        
+        if not os.path.isfile(cached_langs_list_file):
+            return None
+        
+        try:
+            with open(cached_langs_list_file, "r", encoding="utf-8") as f:
+                langs_list = json.load(f)
+                
+            for lang in langs_list:
+                if lang.get("name") == model_name:
+                    return lang.get("url")
+        except Exception:
+            return None
+        
+        return None
 
     @staticmethod
     def install_model(addon_prefs, context) -> None:
@@ -345,9 +295,13 @@ class LIPSYNC2D_VoskHelper():
         if addon_prefs.current_lang == "none":
             return
 
+        # Get the model URL from the cached list
+        model_url = LIPSYNC2D_VoskHelper.get_model_url(addon_prefs.current_lang)
+        if not model_url:
+            raise Exception(f"Could not find download URL for model: {addon_prefs.current_lang}")
+
         addon_prefs.is_downloading = True
         addon_prefs.download_progress = 0.0
-        addon_prefs.download_status_text = "Starting download..."
 
         # Prepare env to ensure process can access to all modules
         env = os.environ.copy()
@@ -355,45 +309,119 @@ class LIPSYNC2D_VoskHelper():
 
         # Get custom cache path to change vosk default one
         vosk_cache_path = LIPSYNC2D_VoskHelper.get_extension_path("cache")
+        
+        # Create progress file path
+        progress_file = LIPSYNC2D_VoskHelper.get_extension_path("tmp") / "download_progress.json"
 
-        args = [addon_prefs.current_lang, vosk_cache_path]
-        LIPSYNC2D_VoskHelper.worker_log_path = vosk_cache_path / "download_model.log"
+        args = [model_url, addon_prefs.current_lang, str(vosk_cache_path), str(progress_file)]
         
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_dir)
         worker_path = os.path.join(project_root, "Workers", "wrk_download_models.py")
 
-        LIPSYNC2D_VoskHelper.worker_log_file = open(
-            LIPSYNC2D_VoskHelper.worker_log_path, "w", encoding="utf-8"
-        )
         LIPSYNC2D_VoskHelper.worker_proc = subprocess.Popen(
             [sys.executable, worker_path, *args],
             env=env,
-            stdout=LIPSYNC2D_VoskHelper.worker_log_file,
-            stderr=LIPSYNC2D_VoskHelper.worker_log_file,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             text=True)
 
         bpy.app.timers.register(LIPSYNC2D_VoskHelper.check_worker_finished)
         return
 
     @staticmethod
+    def cancel_download() -> None:
+        """
+        Cancel the current download process.
+        Terminates the worker process, cleans up partial files, and resets the download state.
+        """
+        if LIPSYNC2D_VoskHelper.worker_proc:
+            try:
+                LIPSYNC2D_VoskHelper.worker_proc.terminate()
+                LIPSYNC2D_VoskHelper.worker_proc.wait(timeout=2)
+            except Exception:
+                try:
+                    LIPSYNC2D_VoskHelper.worker_proc.kill()
+                except Exception:
+                    pass
+            LIPSYNC2D_VoskHelper.worker_proc = None
+
+        # Clean up the partial zip file
+        all_preferences = bpy.context.preferences
+        package_name = get_package_name()
+        
+        if package_name and all_preferences and all_preferences.addons:
+            addon = all_preferences.addons.get(package_name)
+            if addon and addon.preferences:
+                current_lang = addon.preferences.current_lang
+                if current_lang and current_lang != "none":
+                    cache_path = LIPSYNC2D_VoskHelper.get_extension_path("cache")
+                    zip_path = cache_path / f"{current_lang}.zip"
+                    if zip_path.exists():
+                        try:
+                            os.remove(zip_path)
+                        except Exception:
+                            pass
+
+        LIPSYNC2D_VoskHelper.reset_download_state()
+
+    @staticmethod
+    def reset_download_state() -> None:
+        """
+        Reset the download state to clear any stuck or orphaned download status.
+        This is useful when a download was interrupted or Blender was closed mid-download.
+        """
+        all_preferences = bpy.context.preferences
+        package_name = get_package_name()
+        
+        if package_name is None or all_preferences is None or all_preferences.addons is None:
+            return
+        
+        addon = all_preferences.addons.get(package_name)
+        
+        if addon is None or addon.preferences is None:
+            return
+        
+        addon.preferences.is_downloading = False
+        addon.preferences.download_progress = 0.0
+        
+        # Clean up progress file if it exists
+        progress_file = LIPSYNC2D_VoskHelper.get_extension_path("tmp") / "download_progress.json"
+        if progress_file.exists():
+            try:
+                os.remove(progress_file)
+            except Exception:
+                pass
+
+    @staticmethod
     def check_worker_finished() -> float | None:
         """
         Checks the state of the worker process for LIPSYNC2D_VoskHelper and updates
-        related addon preferences if necessary.
+        related addon preferences if necessary. Also reads progress updates from
+        the progress file and updates the UI.
 
         This method inspects the current state of the `worker_proc` attribute
         belonging to `LIPSYNC2D_VoskHelper`. If the process is still active,
-        it returns 1. If the process has completed execution, the method performs
-        additional cleanup tasks, such as resetting the `worker_proc` to None,
-        retrieving the associated addon preferences from Blender's context,
-        and updating the `is_downloading` preference flag for the identified addon
-        (if applicable).
+        it reads the progress file and updates the download_progress property.
+        If the process has completed execution, the method performs cleanup tasks,
+        such as resetting the `worker_proc` to None, retrieving the associated
+        addon preferences from Blender's context, and updating the `is_downloading`
+        preference flag for the identified addon (if applicable).
 
-        :returns: 1 if the worker process is still active; None otherwise.
-        :rtype: int or None
+        :returns: 0.5 if the worker process is still active (check every 0.5s); None otherwise.
+        :rtype: float or None
         """
         if LIPSYNC2D_VoskHelper.worker_proc is None:
+            # Check if we have an orphaned download state (Blender was restarted mid-download)
+            all_preferences = bpy.context.preferences
+            package_name = get_package_name()
+            
+            if package_name and all_preferences and all_preferences.addons:
+                addon = all_preferences.addons.get(package_name)
+                if addon and addon.preferences and addon.preferences.is_downloading:
+                    # Reset orphaned download state
+                    LIPSYNC2D_VoskHelper.reset_download_state()
+            
             return None
 
         all_preferences = bpy.context.preferences
@@ -407,19 +435,30 @@ class LIPSYNC2D_VoskHelper():
         if addon is None or addon.preferences is None:
             return None
 
-        LIPSYNC2D_VoskHelper.update_download_progress(addon.preferences)
+        # Read progress from file
+        progress_file = LIPSYNC2D_VoskHelper.get_extension_path("tmp") / "download_progress.json"
+        if progress_file.exists():
+            try:
+                with open(progress_file, "r") as f:
+                    progress_data = json.load(f)
+                    addon.preferences.download_progress = progress_data.get("progress", 0.0)
+            except Exception:
+                pass  # Silently ignore read errors
 
         if LIPSYNC2D_VoskHelper.worker_proc.poll() is None:
+            # Process still running, check again in 0.5 seconds
             return 0.5
         else:
-            return_code = LIPSYNC2D_VoskHelper.worker_proc.returncode
+            # Process finished
             LIPSYNC2D_VoskHelper.worker_proc = None
-            if LIPSYNC2D_VoskHelper.worker_log_file is not None:
-                LIPSYNC2D_VoskHelper.worker_log_file.close()
-                LIPSYNC2D_VoskHelper.worker_log_file = None
-            addon.preferences["is_downloading"] = False
-            addon.preferences["download_progress"] = 0.0
-            addon.preferences["download_status_text"] = "" if return_code == 0 else "Download failed. See cache/download_model.log"
-            LIPSYNC2D_VoskHelper.tag_ui_redraw()
+            addon.preferences.is_downloading = False
+            addon.preferences.download_progress = 0.0
+            
+            # Clean up progress file
+            if progress_file.exists():
+                try:
+                    os.remove(progress_file)
+                except Exception:
+                    pass
 
             return None

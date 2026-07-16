@@ -1,0 +1,24 @@
+# Start over
+git checkout master
+git branch -D integration
+git checkout -b integration
+
+# Merge with a strategy that better handles overlapping changes
+git merge --no-ff keyframing
+
+# For subsequent merges, use the recursive strategy with diff3
+git merge --no-ff override -X patience --no-commit
+# Now manually check the files before committing:
+git diff --cached
+# If it looks wrong, manually fix the files, then:
+git add .
+git commit -m "Merge override while preserving keyframing changes"
+
+# Repeat for the others
+git merge --no-ff new_visemes -X patience --no-commit
+git diff --cached
+git commit -m "Merge new_visemes"
+
+git merge --no-ff singlechannel -X patience --no-commit
+git diff --cached  
+git commit -m "Merge singlechannel"
