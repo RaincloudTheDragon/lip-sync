@@ -67,6 +67,7 @@ class LIPSYNC2D_OT_AnalyzeAudio(bpy.types.Operator):
         target_channel = props.lip_sync_2d_bake_channel
         
         muted_strips = []
+        file_path: str | None = None
         try:
             if target_channel != "ALL":
                 target_ch_int = int(target_channel)
@@ -77,16 +78,16 @@ class LIPSYNC2D_OT_AnalyzeAudio(bpy.types.Operator):
                             muted_strips.append(strip)
 
             file_path = extract_audio()
-            
+
         finally:
             # Restore mute state
             for strip in muted_strips:
                 strip.mute = False
 
-        if not os.path.isfile(f"{file_path}"):
+        if not file_path or not os.path.isfile(file_path):
             self.report(
                 type={"ERROR"},
-                message="Error while importing extracted audio WAV file from /tmp",
+                message="Failed to mix down audio to the extension tmp folder",
             )
             self.reset_bake_range()
             return {"CANCELLED"}
@@ -313,19 +314,29 @@ class LIPSYNC2D_OT_AnalyzeAudio(bpy.types.Operator):
         bpy.context.scene.frame_end = self.frame_end
 
 
-def extract_audio():
+def extract_audio() -> str | None:
+    """Mix down scene audio to a mono 16 kHz WAV for Vosk.
+
+    Returns the absolute filepath on success, or None if mixdown failed.
+    """
     package_name = cast(str, get_package_name())
     output_path = bpy.utils.extension_path_user(package_name, path="tmp", create=True)
     filepath = os.path.join(output_path, "cgp_lipsync_extracted_audio.wav")
 
-    bpy.ops.sound.mixdown(
+    # relative_path defaults to True and can rewrite absolute paths relative to
+    # the .blend file, so the WAV never lands where we check for it.
+    result = bpy.ops.sound.mixdown(
         filepath=filepath,
         check_existing=False,
+        relative_path=False,
         container="WAV",
         codec="PCM",
         format="S16",
         mixrate=16000,  # Sample rate for Vosk
         channels="MONO",  # Vosk prefers mono
     )
+
+    if result != {"FINISHED"} or not os.path.isfile(filepath):
+        return None
 
     return filepath
